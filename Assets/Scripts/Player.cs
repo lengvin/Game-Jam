@@ -34,6 +34,9 @@ public class Player : MonoBehaviour
 	private float m_accelTime;
 	private float m_accelTimer;
 	
+	private Vector2 m_velocity;
+	private Vector2 m_fallVel;
+	
 	
 	
 	private void Start()
@@ -45,6 +48,7 @@ public class Player : MonoBehaviour
 	
 	private void Update()
 	{
+		
 		SmoothSpeed();
 		GroundCheck();
 		RotateSprite();
@@ -106,10 +110,11 @@ public class Player : MonoBehaviour
 	private void Jump()
 	{
 		m_jumpDelayTimer -= Time.deltaTime;
+		m_velocity = new Vector2(m_velocity.x, RotVec2(rb.velocity, -transform.localRotation.eulerAngles.z).y);
 		
 		if(Input.GetKeyDown(jumpKey) && m_jumpDelayTimer < 0 && m_grounded)
 		{
-			rb.AddForce(jumpForce * transform.up);
+			m_velocity = new Vector2(m_velocity.x, jumpForce);
 			m_jumpDelayTimer = jumpDelay;
 		}
 	}
@@ -118,21 +123,22 @@ public class Player : MonoBehaviour
 	{
 		m_grounded = Physics2D.Raycast(transform.position, -transform.up, m_playerHeight + 0.1f, groundLayer);
 		
-		RaycastHit2D hit = Physics2D.Raycast(transform.position, -transform.up, m_closeToGroundDist, groundLayer);
+		RaycastHit2D hit = Physics2D.CircleCast(transform.position, m_closeToGroundDist, Vector2.up, 0, groundLayer);
 		m_closeToGround = hit.collider != null;
 		
-		if(m_closeToGround)
-			transform.localRotation = Quaternion.Euler(0, 0, transform.localRotation.eulerAngles.z + rotPerSec * Time.deltaTime * Mathf.Sign(Vector2.Dot(transform.up, hit.point)));
+		if(m_closeToGround && Vector2.Angle(hit.normal, Vector2.up) < 45)
+			transform.localRotation = Quaternion.Slerp(transform.localRotation, Quaternion.Euler(0, 0, -Mathf.Rad2Deg * Mathf.Atan2(hit.normal.x, hit.normal.y)), Mathf.Clamp(Time.deltaTime * 10, 0, 1));
 	}
 	
 	
 	// Movement
-	private Vector2 lastVel;
+	
 	private void Move()
 	{
-		Vector2 vel = m_currSpeed * transform.right;
-		rb.velocity += vel - lastVel;
-		lastVel = vel;
+		m_velocity = new Vector2(m_currSpeed, m_velocity.y);
+		
+		rb.velocity = RotVec2(m_velocity, transform.localRotation.eulerAngles.z);
+		//rb.AddForce(-Vector2.up * 9.81f);
 	}
 	
 	
@@ -141,5 +147,20 @@ public class Player : MonoBehaviour
 	private Vector3 MultVec3(Vector3 vec1, Vector3 vec2)
 	{
 		return new Vector3(vec1.x * vec2.x, vec1.y * vec2.y, vec1.z * vec2.z);
+	}
+	
+	private Vector2 MultVec2(Vector2 vec1, Vector2 vec2)
+	{
+		return new Vector2(vec1.x * vec2.x, vec1.y * vec2.y);
+	}
+	
+	private Vector2 RotVec2(Vector2 vec, float angleDeg)
+	{
+		float theta = Mathf.Deg2Rad * angleDeg;
+		
+		float cs = Mathf.Cos(theta);
+		float sn = Mathf.Sin(theta);
+		
+		return new Vector2(vec.x * cs - vec.y * sn, vec.x * sn + vec.y * cs);
 	}
 }
